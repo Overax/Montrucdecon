@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import type { View } from '../types';
 import { useTheme } from '../contexts/ThemeContext';

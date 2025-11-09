@@ -376,73 +376,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             throw new Error('INVALID_PLAYLIST_URL');
         }
         const playlistId = match[1];
-        
-        const apiKey = 'AIzaSyBavQiFP2bUrxu5BLRH3-VJKay4ujjhIBQ';
-        
-        const API_URL = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${apiKey}`;
 
+        // This function now calls a backend API route.
+        // The backend should securely use the YouTube API key and return the video data.
         try {
-            const response = await fetch(API_URL);
-            const data = await response.json();
+            const response = await fetch('/api/sync-youtube', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ playlistId }),
+            });
 
             if (!response.ok) {
-                console.error("YouTube API Error:", data);
-                if (data.error) {
-                    const reason = data.error.errors?.[0]?.reason;
-                    if (reason === 'badRequest' || reason === 'API_KEY_INVALID' || response.status === 400) {
-                        throw new Error('YOUTUBE_API_KEY_INVALID');
-                    }
-                    if (response.status === 404) {
-                         throw new Error('PLAYLIST_NOT_FOUND');
-                    }
-                }
-                throw new Error('YOUTUBE_API_ERROR');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Erreur du serveur backend.');
             }
 
-            const newVideos: Omit<PortfolioVideo, 'id' | 'createdAt' | 'isPinned'>[] = [];
+            const { videos: fetchedVideos } = await response.json();
             
-            for (const item of data.items) {
-                const videoId = item.snippet?.resourceId?.videoId;
-                if (!videoId) continue;
-                
-                const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            setAppState(prev => {
+                const existingVideoUrls = new Set(prev.portfolioVideos.map(v => v.videoUrl));
+                const newVideos: PortfolioVideo[] = [];
 
-                const alreadyExists = appState.portfolioVideos.some(v => v.videoUrl.includes(videoId));
-                if (alreadyExists) continue;
+                fetchedVideos.forEach((item: any) => {
+                    const videoUrl = `https://www.youtube.com/watch?v=${item.videoId}`;
+                    if (!existingVideoUrls.has(videoUrl)) {
+                        newVideos.push({
+                            id: generateId(),
+                            title: item.title,
+                            description: item.description,
+                            videoUrl: videoUrl,
+                            thumbnailUrl: item.thumbnailUrl,
+                            tags: ['YouTube', 'Synchronisé'],
+                            isPinned: false,
+                            createdAt: item.publishedAt || new Date().toISOString(),
+                        });
+                    }
+                });
 
-                const newVideo = {
-                    title: item.snippet.title,
-                    description: item.snippet.description.substring(0, 300),
-                    videoUrl: videoUrl,
-                    thumbnailUrl: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || '',
-                    tags: ['YouTube'],
-                    projectId: undefined
-                };
-                newVideos.push(newVideo);
-            }
+                if (newVideos.length === 0) {
+                    triggerNotification('Portfolio déjà à jour.');
+                    return prev;
+                }
 
-            if (newVideos.length > 0) {
-                const videosToAdd: PortfolioVideo[] = newVideos.map(v => ({
-                    ...v,
-                    id: generateId(),
-                    createdAt: new Date().toISOString(),
-                    isPinned: false
-                }));
-                setAppState(prev => ({
+                triggerNotification(`${newVideos.length} vidéo(s) ajoutée(s) !`, true);
+                return {
                     ...prev,
-                    portfolioVideos: [...prev.portfolioVideos, ...videosToAdd]
-                }));
-                triggerNotification(`${newVideos.length} nouvelle(s) vidéo(s) ajoutée(s) !`);
-            } else {
-                triggerNotification("Aucune nouvelle vidéo trouvée.");
-            }
+                    portfolioVideos: [...prev.portfolioVideos, ...newVideos],
+                };
+            });
 
         } catch (error) {
-            console.error("syncPlaylist error:", error);
-            if (error instanceof Error && ['INVALID_PLAYLIST_URL', 'YOUTUBE_API_KEY_INVALID', 'PLAYLIST_NOT_FOUND', 'YOUTUBE_API_ERROR'].includes(error.message)) {
-                throw error;
-            }
-            throw new Error('YOUTUBE_API_ERROR');
+            console.error("Erreur lors de la synchronisation avec le backend:", error);
+            throw new Error("La communication avec le service de synchronisation a échoué. Assurez-vous que le backend fonctionne correctement.");
         }
     };
 

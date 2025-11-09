@@ -20,13 +20,11 @@ const Portfolio: React.FC<{ openModal: (type: 'newPortfolioVideo', payload?: any
         try {
             await syncPlaylist();
         } catch (error: any) {
-            let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
+            let errorMessage = "Une erreur inattendue est survenue. Veuillez réessayer.";
             if (error.message === 'INVALID_PLAYLIST_URL') {
                 errorMessage = "L'URL de la playlist semble invalide. Vérifiez le lien et réessayez.";
-            } else if (error.message === 'PLAYLIST_NOT_FOUND') {
-                errorMessage = "Playlist non trouvée. Assurez-vous qu'elle est publique et que le lien est correct.";
-            } else if (error.message === 'YOUTUBE_API_KEY_INVALID') {
-                errorMessage = "La clé API n'est pas valide pour YouTube. Veuillez vérifier la clé dans l'application.";
+            } else {
+                errorMessage = `La synchronisation a échoué. Assurez-vous que votre service backend est fonctionnel et que l'URL est correcte. (${error.message})`;
             }
             setSyncError(errorMessage);
         } finally {
