@@ -67,6 +67,15 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const sanitizeData = <T extends object>(data: T): T => {
+    return Object.entries(data).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+            (acc as any)[key] = value;
+        }
+        return acc;
+    }, {} as T);
+};
+
 const EMPTY_APP_STATE: AppState = {
     profile: null,
     clients: [],
@@ -131,9 +140,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateProfile = async (updates: Partial<FreelancerProfile>) => {
         if (!currentUser) return;
         try {
-            // Assuming a single document in the 'publicProfile' collection
+            const sanitizedUpdates = sanitizeData(updates);
             const profileDocRef = doc(db, 'publicProfile', 'main');
-            await setDoc(profileDocRef, updates, { merge: true });
+            await setDoc(profileDocRef, sanitizedUpdates, { merge: true });
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error updating profile: ", error);
@@ -146,9 +155,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!currentUser) throw new Error("Not authenticated");
         const newClient = { ...clientData, createdAt: new Date().toISOString() };
         try {
-            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'clients'), newClient);
+            const sanitizedClient = sanitizeData(newClient);
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'clients'), sanitizedClient);
             triggerNotification('Sauvegardé ✓', true);
-            return { ...newClient, id: docRef.id };
+            return { ...sanitizedClient, id: docRef.id };
         } catch (error) {
             console.error("Error adding client: ", error);
             triggerNotification('Erreur de sauvegarde');
@@ -159,7 +169,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateClient = async (clientId: string, updates: Partial<Client>) => {
         if (!currentUser) return;
         try {
-            await updateDoc(doc(db, 'users', currentUser.uid, 'clients', clientId), updates);
+            const sanitizedUpdates = sanitizeData(updates);
+            await updateDoc(doc(db, 'users', currentUser.uid, 'clients', clientId), sanitizedUpdates);
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error updating client: ", error);
@@ -198,9 +209,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const addProject = async (projectData: Omit<Project, 'id'>): Promise<Project> => {
         if (!currentUser) throw new Error("Not authenticated");
         try {
-            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'projects'), projectData);
+            const sanitizedProject = sanitizeData(projectData);
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'projects'), sanitizedProject);
             triggerNotification('Sauvegardé ✓', true);
-            return { ...projectData, id: docRef.id };
+            return { ...sanitizedProject, id: docRef.id };
         } catch (error) {
             console.error("Error adding project: ", error);
             triggerNotification('Erreur de sauvegarde');
@@ -211,7 +223,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateProject = async (projectId: string, updates: Partial<Project>) => {
         if (!currentUser) return;
         try {
-            await updateDoc(doc(db, 'users', currentUser.uid, 'projects', projectId), updates);
+            const sanitizedUpdates = sanitizeData(updates);
+            await updateDoc(doc(db, 'users', currentUser.uid, 'projects', projectId), sanitizedUpdates);
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error updating project: ", error);
@@ -250,9 +263,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!currentUser) throw new Error("Not authenticated");
         const newTask = { ...taskData, completed: false };
         try {
-            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'tasks'), newTask);
+            const sanitizedTask = sanitizeData(newTask);
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'tasks'), sanitizedTask);
             triggerNotification('Sauvegardé ✓', true);
-            return { ...newTask, id: docRef.id };
+            return { ...sanitizedTask, id: docRef.id };
         } catch (error) {
             console.error("Error adding task: ", error);
             triggerNotification('Erreur de sauvegarde');
@@ -263,7 +277,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateTask = async (taskId: string, updates: Partial<Task>) => {
         if (!currentUser) return;
         try {
-            await updateDoc(doc(db, 'users', currentUser.uid, 'tasks', taskId), updates);
+            const sanitizedUpdates = sanitizeData(updates);
+            await updateDoc(doc(db, 'users', currentUser.uid, 'tasks', taskId), sanitizedUpdates);
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error updating task: ", error);
@@ -292,9 +307,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             createdAt: new Date().toISOString(),
         };
         try {
-            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'notes'), newNote);
+            const sanitizedNote = sanitizeData(newNote);
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'notes'), sanitizedNote);
             triggerNotification('Sauvegardé ✓', true);
-            return { ...newNote, id: docRef.id };
+            return { ...sanitizedNote, id: docRef.id };
         } catch (error) {
             console.error("Error adding note: ", error);
             triggerNotification('Erreur de sauvegarde');
@@ -305,7 +321,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateNote = async (noteId: string, updates: Partial<Note>) => {
         if (!currentUser) return;
         try {
-            await updateDoc(doc(db, 'users', currentUser.uid, 'notes', noteId), updates);
+            const sanitizedUpdates = sanitizeData(updates);
+            await updateDoc(doc(db, 'users', currentUser.uid, 'notes', noteId), sanitizedUpdates);
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error updating note: ", error);
@@ -364,7 +381,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!currentUser) return;
         const newDocument = { ...docData, uploadedAt: new Date().toISOString() };
         try {
-            await addDoc(collection(db, 'users', currentUser.uid, 'documents'), newDocument);
+            const sanitizedDocument = sanitizeData(newDocument);
+            await addDoc(collection(db, 'users', currentUser.uid, 'documents'), sanitizedDocument);
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error adding document: ", error);
@@ -376,7 +394,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!currentUser) return;
         const newVideo = { ...videoData, uploadedAt: new Date().toISOString(), type: 'video' };
         try {
-            await addDoc(collection(db, 'users', currentUser.uid, 'documents'), newVideo);
+            const sanitizedVideo = sanitizeData(newVideo);
+            await addDoc(collection(db, 'users', currentUser.uid, 'documents'), sanitizedVideo);
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error adding video: ", error);
@@ -389,9 +408,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!currentUser) throw new Error("Not authenticated");
         const newVideo = { ...videoData, createdAt: new Date().toISOString(), isPinned: false };
         try {
-            const docRef = await addDoc(collection(db, 'publicPortfolioVideos'), newVideo);
+            const sanitizedVideo = sanitizeData(newVideo);
+            const docRef = await addDoc(collection(db, 'publicPortfolioVideos'), sanitizedVideo);
             triggerNotification('Sauvegardé ✓', true);
-            return { ...newVideo, id: docRef.id };
+            return { ...sanitizedVideo, id: docRef.id };
         } catch (error) {
             console.error("Error adding portfolio video: ", error);
             triggerNotification('Erreur de sauvegarde');
@@ -402,7 +422,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updatePortfolioVideo = async (videoId: string, updates: Partial<PortfolioVideo>) => {
         if (!currentUser) return;
         try {
-            await updateDoc(doc(db, 'publicPortfolioVideos', videoId), updates);
+            const sanitizedUpdates = sanitizeData(updates);
+            await updateDoc(doc(db, 'publicPortfolioVideos', videoId), sanitizedUpdates);
             triggerNotification('Sauvegardé ✓', true);
         } catch (error) {
             console.error("Error updating portfolio video: ", error);
