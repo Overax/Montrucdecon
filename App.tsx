@@ -40,20 +40,15 @@ const AppContent: React.FC = () => {
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [activeModal, setActiveModal] = useState<ModalState | null>(null);
     const [recentlyAddedClientId, setRecentlyAddedClientId] = useState<string | null>(null);
-    const [isPublicView, setIsPublicView] = useState(false);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+    const { profile, updateProfile } = useAppContext();
+
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('share') === 'portfolio') {
-            setIsPublicView(true);
-        } else {
-            const hasOnboarded = localStorage.getItem('freelancerOnboarded') === 'true';
-            if (!hasOnboarded) {
-                setShowOnboarding(true);
-            }
+        if (profile && !profile.onboarded) {
+            setShowOnboarding(true);
         }
-    }, []);
+    }, [profile]);
 
     useEffect(() => {
       if (recentlyAddedClientId) {
@@ -63,9 +58,9 @@ const AppContent: React.FC = () => {
     }, [recentlyAddedClientId]);
 
     const handleOnboardingComplete = useCallback(() => {
-        localStorage.setItem('freelancerOnboarded', 'true');
+        updateProfile({ onboarded: true });
         setShowOnboarding(false);
-    }, []);
+    }, [updateProfile]);
 
     const handleSetView = (newView: View) => {
         setView(newView);
@@ -161,35 +156,37 @@ const AppContent: React.FC = () => {
       : 'flex-1 overflow-x-hidden overflow-y-auto bg-neutral-100 dark:bg-neutral-900 p-6 md:p-8';
 
 
+    const isPublicView = new URLSearchParams(window.location.search).get('share') === 'portfolio';
+
+    if (isPublicView) {
+        return <PublicPortfolioPage />;
+    }
+
+    if (!currentUser) {
+        return <LoginPage />;
+    }
+
     return (
         <div className="flex h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-800 dark:text-neutral-200 font-sans">
-            {isPublicView ? (
-                <PublicPortfolioPage />
-            ) : !currentUser ? (
-                <LoginPage />
-            ) : (
-                <>
-                    {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
-                    <Sidebar
-                        currentView={view}
-                        setView={handleSetView}
-                        isOpen={isMobileSidebarOpen}
-                        setIsOpen={setIsMobileSidebarOpen}
-                    />
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <Header
-                            currentView={view}
-                            onNewItem={handleNewItem}
-                            onMenuClick={() => setIsMobileSidebarOpen(true)}
-                        />
-                        <main className={mainContentClass}>
-                            {renderView()}
-                        </main>
-                    </div>
-                    {renderModals()}
-                    <SaveStatusIndicator />
-                </>
-            )}
+            {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+            <Sidebar
+                currentView={view}
+                setView={handleSetView}
+                isOpen={isMobileSidebarOpen}
+                setIsOpen={setIsMobileSidebarOpen}
+            />
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <Header
+                    currentView={view}
+                    onNewItem={handleNewItem}
+                    onMenuClick={() => setIsMobileSidebarOpen(true)}
+                />
+                <main className={mainContentClass}>
+                    {renderView()}
+                </main>
+            </div>
+            {renderModals()}
+            <SaveStatusIndicator />
         </div>
     );
 };

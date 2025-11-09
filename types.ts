@@ -14,6 +14,7 @@ export interface FreelancerProfile {
   address?: string;
   proId?: string; // e.g. SIRET
   portfolioUrl?: string;
+  onboarded?: boolean;
 }
 
 export interface Client {

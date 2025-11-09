@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import PortfolioVideoCard from './portfolio/PortfolioVideoCard';
 import ViewVideoModal from './portfolio/ViewVideoModal';
@@ -15,9 +15,9 @@ const PublicPortfolioPage: React.FC = () => {
     useEffect(() => {
         const fetchPublicData = async () => {
             try {
-                const profileDoc = await getDocs(collection(db, 'publicProfile'));
-                if (!profileDoc.empty) {
-                    setProfile(profileDoc.docs[0].data() as FreelancerProfile);
+                const profileDoc = await getDoc(doc(db, 'publicProfile', 'main'));
+                if (profileDoc.exists()) {
+                    setProfile(profileDoc.data() as FreelancerProfile);
                 }
 
                 const videosSnapshot = await getDocs(collection(db, 'publicPortfolioVideos'));

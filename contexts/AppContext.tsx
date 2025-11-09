@@ -20,29 +20,29 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-    updateProfile: (updates: Partial<FreelancerProfile>) => void;
+    updateProfile: (updates: Partial<FreelancerProfile>) => Promise<void>;
     addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Promise<Client>;
-    updateClient: (clientId: string, updates: Partial<Client>) => void;
-    deleteClient: (clientId: string) => void;
-    addProject: (project: Omit<Project, 'id'>) => Project;
-    updateProject: (projectId: string, updates: Partial<Project>) => void;
-    deleteProject: (projectId: string) => void;
-    updateProjectStatus: (projectId: string, status: ProjectStatus) => void;
+    updateClient: (clientId: string, updates: Partial<Client>) => Promise<void>;
+    deleteClient: (clientId: string) => Promise<void>;
+    addProject: (project: Omit<Project, 'id'>) => Promise<Project>;
+    updateProject: (projectId: string, updates: Partial<Project>) => Promise<void>;
+    deleteProject: (projectId: string) => Promise<void>;
+    updateProjectStatus: (projectId: string, status: ProjectStatus) => Promise<void>;
     tasks: Task[];
-    addTask: (task: Omit<Task, 'id' | 'completed'>) => Task;
-    updateTask: (taskId: string, updates: Partial<Task>) => void;
-    deleteTask: (taskId: string) => void;
+    addTask: (task: Omit<Task, 'id' | 'completed'>) => Promise<Task>;
+    updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
+    deleteTask: (taskId: string) => Promise<void>;
     notes: Note[];
-    addNote: (note: Partial<Omit<Note, 'id' | 'createdAt'>>) => Note;
-    updateNote: (noteId: string, updates: Partial<Note>) => void;
-    deleteNote: (noteId: string) => void;
+    addNote: (note: Partial<Omit<Note, 'id' | 'createdAt'>>) => Promise<Note>;
+    updateNote: (noteId: string, updates: Partial<Note>) => Promise<void>;
+    deleteNote: (noteId: string) => Promise<void>;
     noteLinks: NoteLink[];
-    addNoteLink: (from: string, to: string) => void;
-    deleteNoteLink: (linkId: string) => void;
-    deleteLinksForNote: (noteId: string) => void;
-    addPortfolioVideo: (video: Omit<PortfolioVideo, 'id' | 'createdAt' | 'isPinned'>) => PortfolioVideo;
-    updatePortfolioVideo: (videoId: string, updates: Partial<PortfolioVideo>) => void;
-    deletePortfolioVideo: (videoId: string) => void;
+    addNoteLink: (from: string, to: string) => Promise<void>;
+    deleteNoteLink: (linkId: string) => Promise<void>;
+    deleteLinksForNote: (noteId: string) => Promise<void>;
+    addPortfolioVideo: (video: Omit<PortfolioVideo, 'id' | 'createdAt' | 'isPinned'>) => Promise<PortfolioVideo>;
+    updatePortfolioVideo: (videoId: string, updates: Partial<PortfolioVideo>) => Promise<void>;
+    deletePortfolioVideo: (videoId: string) => Promise<void>;
     setYoutubePlaylistUrl: (url: string) => void;
     syncPlaylist: () => Promise<void>;
     stats: {
