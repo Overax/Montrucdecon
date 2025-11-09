@@ -14,9 +14,11 @@ import Settings from './components/Settings';
 import Portfolio from './components/Portfolio';
 import PublicPortfolioPage from './components/PublicPortfolioPage';
 import { AppProvider } from './contexts/AppContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ModalProvider } from './contexts/ModalContext';
 import { View, Client } from './types';
+import LoginPage from './components/LoginPage';
 import NewItemHubModal from './components/modals/NewItemHubModal';
 import NewClientModal from './components/modals/NewClientModal';
 import NewProjectModal from './components/modals/NewProjectModal';
@@ -32,6 +34,7 @@ interface ModalState {
 }
 
 const AppContent: React.FC = () => {
+    const { currentUser } = useAuth();
     const [view, setView] = useState<View>('dashboard');
     const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
     const [showOnboarding, setShowOnboarding] = useState(false);
@@ -43,12 +46,12 @@ const AppContent: React.FC = () => {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('share') === 'portfolio') {
-          setIsPublicView(true);
-        }
-
-        const hasOnboarded = localStorage.getItem('freelancerOnboarded') === 'true';
-        if (!hasOnboarded) {
-            setShowOnboarding(true);
+            setIsPublicView(true);
+        } else {
+            const hasOnboarded = localStorage.getItem('freelancerOnboarded') === 'true';
+            if (!hasOnboarded) {
+                setShowOnboarding(true);
+            }
         }
     }, []);
 
@@ -162,19 +165,21 @@ const AppContent: React.FC = () => {
         <div className="flex h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-800 dark:text-neutral-200 font-sans">
             {isPublicView ? (
                 <PublicPortfolioPage />
+            ) : !currentUser ? (
+                <LoginPage />
             ) : (
                 <>
                     {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
-                    <Sidebar 
-                        currentView={view} 
+                    <Sidebar
+                        currentView={view}
                         setView={handleSetView}
                         isOpen={isMobileSidebarOpen}
                         setIsOpen={setIsMobileSidebarOpen}
                     />
                     <div className="flex-1 flex flex-col overflow-hidden">
-                        <Header 
-                            currentView={view} 
-                            onNewItem={handleNewItem} 
+                        <Header
+                            currentView={view}
+                            onNewItem={handleNewItem}
                             onMenuClick={() => setIsMobileSidebarOpen(true)}
                         />
                         <main className={mainContentClass}>
@@ -190,13 +195,21 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const isPublicView = new URLSearchParams(window.location.search).get('share') === 'portfolio';
+
   return (
     <ThemeProvider>
-        <AppProvider>
+      <AuthProvider>
+        {isPublicView ? (
+          <AppContent />
+        ) : (
+          <AppProvider>
             <ModalProvider>
-                <AppContent />
+              <AppContent />
             </ModalProvider>
-        </AppProvider>
+          </AppProvider>
+        )}
+      </AuthProvider>
     </ThemeProvider>
   );
 };

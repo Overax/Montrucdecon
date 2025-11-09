@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
+import { collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from './AuthContext';
 import type { Client, Project, Task, Note, FreelancerProfile, ProjectStatus, DocumentFile, NoteLink, PortfolioVideo } from '../types';
 import { NOTE_COLORS } from '../constants';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -18,7 +21,7 @@ interface AppState {
 
 interface AppContextType extends AppState {
     updateProfile: (updates: Partial<FreelancerProfile>) => void;
-    addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Client;
+    addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Promise<Client>;
     updateClient: (clientId: string, updates: Partial<Client>) => void;
     deleteClient: (clientId: string) => void;
     addProject: (project: Omit<Project, 'id'>) => Project;
@@ -64,49 +67,6 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const generateId = () => `id_${new Date().getTime()}_${Math.random().toString(36).substr(2, 9)}`;
-
-// --- DUMMY DATA ---
-const DUMMY_APP_STATE: AppState = {
-    profile: { name: 'Alex Luna', title: 'Monteur Vidéo Créatif', email: 'alex.luna@example.com', phone: '0612345678', avatarUrl: '' },
-    clients: [
-        { id: 'client_1', name: 'Studio Anima', company: 'Anima Productions', email: 'contact@anima.studio', phone: '0123456789', tags: ['Animation', 'Corporate'], createdAt: new Date().toISOString() },
-        { id: 'client_2', name: 'Sophie Durand', company: 'Influence & Co', email: 'sophie.d@influence.co', phone: '0987654321', tags: ['Réseaux Sociaux'], createdAt: new Date().toISOString() },
-    ],
-    projects: [
-        { id: 'proj_1', clientId: 'client_1', name: 'Vidéo publicitaire V2', status: 'En Cours', deadline: new Date(new Date().setDate(new Date().getDate() + 10)).toISOString(), estimatedRevenue: 2500 },
-        { id: 'proj_2', clientId: 'client_2', name: 'Reels Instagram - Mai', status: 'À Démarrer', deadline: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString(), estimatedRevenue: 800 },
-        { id: 'proj_3', clientId: 'client_1', name: 'Film institutionnel', status: 'En Révision', deadline: new Date(new Date().setDate(new Date().getDate() + 20)).toISOString(), estimatedRevenue: 4000 },
-        { id: 'proj_4', clientId: 'client_2', name: 'Montage VLOG YouTube', status: 'Terminé', deadline: new Date(new Date().setDate(new Date().getDate() - 15)).toISOString(), estimatedRevenue: 650 },
-    ],
-    documents: [
-        { id: 'doc_1', clientId: 'client_1', name: 'Brief_Animation.pdf', type: 'pdf', uploadedAt: new Date().toISOString() },
-        { id: 'doc_2', clientId: 'client_1', name: 'Logo_Anima.png', type: 'image', uploadedAt: new Date().toISOString() },
-        { id: 'doc_3', clientId: 'client_1', name: 'Pub_Anima_V1.mp4', type: 'video', url: '#', thumbnailUrl: 'https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=400&h=300&fit=crop', uploadedAt: new Date().toISOString() },
-        { id: 'doc_4', clientId: 'client_2', name: 'Reel_Mai_1.mp4', type: 'video', url: '#', thumbnailUrl: 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?w=400&h=300&fit=crop', uploadedAt: new Date().toISOString() },
-    ],
-    tasks: [
-        { id: 'task_1', text: 'Exporter la première version pour Anima', completed: false, dueDate: new Date().toISOString(), priority: 'Haute', projectId: 'proj_1', clientId: 'client_1'},
-        { id: 'task_2', text: 'Préparer les rushes pour les reels', completed: false, dueDate: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString(), priority: 'Moyenne', projectId: 'proj_2', clientId: 'client_2'},
-        { id: 'task_3', text: 'Rechercher des musiques pour VLOG', completed: true, dueDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString(), priority: 'Basse', projectId: 'proj_4', clientId: 'client_2'},
-    ],
-    notes: [
-        { id: 'note_1', clientId: 'client_1', content: 'Le client insiste sur une colorimétrie très vive, style "pop". Penser à utiliser la LUT "CyberGlow".', createdAt: new Date().toISOString(), x:0, y:0, width: 192, height: 192, color:'', rotation: 0 },
-        { id: 'note_2', clientId: 'client_1', content: 'Ne pas oublier d\'intégrer le nouveau logo à la fin de la vidéo.', createdAt: new Date().toISOString(), x:0, y:0, width: 192, height: 192, color:'', rotation: 0 },
-        { id: 'note_board_1', content: 'Idée de Reel : Tuto 30s sur un effet de transition populaire', createdAt: new Date().toISOString(), x: 100, y: 150, width: 192, height: 192, color: 'bg-yellow-100 dark:bg-yellow-800/60 border-yellow-200 dark:border-yellow-700/80 text-neutral-800 dark:text-neutral-200', rotation: -2 },
-        { id: 'note_board_2', content: 'Brainstorming pour le projet "Studio Anima". Thèmes : futuriste, clean, dynamique.', createdAt: new Date().toISOString(), x: 400, y: 80, width: 192, height: 192, color: 'bg-blue-100 dark:bg-blue-800/60 border-blue-200 dark:border-blue-700/80 text-neutral-800 dark:text-neutral-200', rotation: 1 },
-        { id: 'note_board_3', content: 'Penser à mettre à jour mon portfolio avec le dernier film institutionnel.', createdAt: new Date().toISOString(), x: 250, y: 300, width: 192, height: 192, color: 'bg-pink-100 dark:bg-pink-800/60 border-pink-200 dark:border-pink-700/80 text-neutral-800 dark:text-neutral-200', rotation: 3 },
-    ],
-    noteLinks: [
-      { id: 'link_1', from: 'note_board_1', to: 'note_board_2' },
-    ],
-    portfolioVideos: [
-      { id: 'pv_1', title: 'Showreel 2024', description: 'Ma dernière démo de montage et motion design.', videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg', tags: ['Showreel', 'Motion Design'], isPinned: true, createdAt: new Date().toISOString() },
-      { id: 'pv_2', title: 'Pub "CyberGlow"', description: 'Montage dynamique pour une marque de tech.', videoUrl: 'https://www.youtube.com/watch?v=rokGy0huYEA', thumbnailUrl: 'https://i.ytimg.com/vi/rokGy0huYEA/hqdefault.jpg', tags: ['Publicité', 'Tech'], isPinned: false, createdAt: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString(), projectId: 'proj_1' },
-    ],
-    youtubePlaylistUrl: 'https://www.youtube.com/playlist?list=PLy2Fsz7cYaMASj-41JEI1HcABJnaMj9Oh',
-};
-
 const EMPTY_APP_STATE: AppState = {
     profile: { name: '', title: '' },
     clients: [],
@@ -118,67 +78,39 @@ const EMPTY_APP_STATE: AppState = {
     portfolioVideos: [],
     youtubePlaylistUrl: '',
 }
-// --- END DUMMY DATA ---
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { currentUser } = useAuth();
+    const [appState, setAppState] = useState<AppState>(EMPTY_APP_STATE);
     const [saveStatus, setSaveStatus] = useState('');
     const saveTimeoutRef = useRef<number | null>(null);
 
-    // --- Undo/Redo State Management ---
-    const [history, setHistory] = useState<AppState[]>(() => {
-        const hasOnboarded = window.localStorage.getItem('freelancerOnboarded') === 'true';
-        const defaultState = hasOnboarded ? EMPTY_APP_STATE : DUMMY_APP_STATE;
-        try {
-            const item = window.localStorage.getItem('appStateHistory');
-            if (item) {
-                const parsedHistory = JSON.parse(item) as any[];
-                return parsedHistory.map(state => {
-                    return {
-                        ...EMPTY_APP_STATE,
-                        ...state
-                    };
-                });
-            }
-        } catch (error) { 
-            console.error("Error reading history from localStorage", error); 
-        }
-        return [defaultState];
-    });
-
-    const [currentIndex, setCurrentIndex] = useState(() => {
-        try {
-            const item = window.localStorage.getItem('appStateCurrentIndex');
-            if (item) return JSON.parse(item);
-        } catch (error) { console.error("Error reading index from localStorage", error); }
-        return 0;
-    });
-
-    const appState = history[currentIndex];
-
     useEffect(() => {
-        try {
-            window.localStorage.setItem('appStateHistory', JSON.stringify(history));
-            window.localStorage.setItem('appStateCurrentIndex', JSON.stringify(currentIndex));
-        } catch (error) {
-            console.error("Error saving state to localStorage", error);
-        }
-    }, [history, currentIndex]);
-    
-    const setAppState = useCallback((updater: (prevState: AppState) => AppState) => {
-        const newState = updater(history[currentIndex]);
-        
-        if (JSON.stringify(newState) === JSON.stringify(history[currentIndex])) {
-            return;
+        const unsubs: (() => void)[] = [];
+
+        // Public data
+        unsubs.push(onSnapshot(collection(db, 'publicProfile'), snapshot => {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setAppState(prev => ({ ...prev, profile: data[0] as FreelancerProfile }));
+        }));
+        unsubs.push(onSnapshot(collection(db, 'publicPortfolioVideos'), snapshot => {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setAppState(prev => ({ ...prev, portfolioVideos: data as PortfolioVideo[] }));
+        }));
+
+        // Private data
+        if (currentUser) {
+            const privateCollections: (keyof AppState)[] = ['clients', 'projects', 'tasks', 'notes', 'noteLinks', 'documents'];
+            privateCollections.forEach(col => {
+                unsubs.push(onSnapshot(collection(db, 'users', currentUser.uid, col), snapshot => {
+                    const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    setAppState(prev => ({ ...prev, [col]: data }));
+                }));
+            });
         }
 
-        const newHistory = history.slice(0, currentIndex + 1);
-        newHistory.push(newState);
-        setHistory(newHistory);
-        setCurrentIndex(newHistory.length - 1);
-    }, [history, currentIndex]);
-
-    const canUndo = currentIndex > 0;
-    const canRedo = currentIndex < history.length - 1;
+        return () => unsubs.forEach(unsub => unsub());
+    }, [currentUser]);
 
     const triggerNotification = useCallback((message: string, isSave: boolean = false) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -195,177 +127,310 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }, 300);
     }, []);
 
-    const undo = useCallback(() => {
-        if (canUndo) {
-            setCurrentIndex(i => i - 1);
-            triggerNotification('Action annulée');
-        }
-    }, [canUndo, triggerNotification]);
-
-    const redo = useCallback(() => {
-        if (canRedo) {
-            setCurrentIndex(i => i + 1);
-            triggerNotification('Action rétablie');
-        }
-    }, [canRedo, triggerNotification]);
-    
     // --- Profile Management ---
-    const updateProfile = (updates: Partial<FreelancerProfile>) => {
-        setAppState(prev => ({ ...prev, profile: { ...prev.profile, ...updates } }));
-        triggerNotification('Sauvegardé ✓', true);
+    const updateProfile = async (updates: Partial<FreelancerProfile>) => {
+        if (!currentUser) return;
+        try {
+            // Assuming a single document in the 'publicProfile' collection
+            const profileDocRef = doc(db, 'publicProfile', 'main');
+            await setDoc(profileDocRef, updates, { merge: true });
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating profile: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
     // --- Client Management ---
-    const addClient = (clientData: Omit<Client, 'id' | 'createdAt'>): Client => {
-        const newClient: Client = { ...clientData, id: generateId(), createdAt: new Date().toISOString() };
-        setAppState(prev => ({ ...prev, clients: [...prev.clients, newClient] }));
-        triggerNotification('Sauvegardé ✓', true);
-        return newClient;
+    const addClient = async (clientData: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
+        if (!currentUser) throw new Error("Not authenticated");
+        const newClient = { ...clientData, createdAt: new Date().toISOString() };
+        try {
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'clients'), newClient);
+            triggerNotification('Sauvegardé ✓', true);
+            return { ...newClient, id: docRef.id };
+        } catch (error) {
+            console.error("Error adding client: ", error);
+            triggerNotification('Erreur de sauvegarde');
+            throw error;
+        }
     };
     
-    const updateClient = (clientId: string, updates: Partial<Client>) => {
-        setAppState(prev => ({ ...prev, clients: prev.clients.map(c => c.id === clientId ? { ...c, ...updates } : c) }));
-        triggerNotification('Sauvegardé ✓', true);
+    const updateClient = async (clientId: string, updates: Partial<Client>) => {
+        if (!currentUser) return;
+        try {
+            await updateDoc(doc(db, 'users', currentUser.uid, 'clients', clientId), updates);
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating client: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
-    const deleteClient = (clientId: string) => {
-        setAppState(prev => {
-            const clientProjects = prev.projects.filter(p => p.clientId === clientId).map(p => p.id);
-            return {
-                ...prev,
-                tasks: prev.tasks.filter(t => !clientProjects.includes(t.projectId ?? '') && t.clientId !== clientId),
-                projects: prev.projects.filter(p => p.clientId !== clientId),
-                documents: prev.documents.filter(d => d.clientId !== clientId),
-                notes: prev.notes.filter(n => n.clientId !== clientId),
-                clients: prev.clients.filter(c => c.id !== clientId)
-            };
-        });
-        triggerNotification('Sauvegardé ✓', true);
+    const deleteClient = async (clientId: string) => {
+        if (!currentUser) return;
+        try {
+            const projectsToDelete = appState.projects.filter(p => p.clientId === clientId);
+            for (const project of projectsToDelete) {
+                await deleteProject(project.id);
+            }
+            const tasksToDelete = appState.tasks.filter(t => t.clientId === clientId);
+            for (const task of tasksToDelete) {
+                await deleteTask(task.id);
+            }
+            const documentsToDelete = appState.documents.filter(d => d.clientId === clientId);
+            for (const document of documentsToDelete) {
+                await deleteDoc(doc(db, 'users', currentUser.uid, 'documents', document.id));
+            }
+            const notesToDelete = appState.notes.filter(n => n.clientId === clientId);
+            for (const note of notesToDelete) {
+                await deleteNote(note.id);
+            }
+            await deleteDoc(doc(db, 'users', currentUser.uid, 'clients', clientId));
+            triggerNotification('Client et données associées supprimés ✓', true);
+        } catch (error) {
+            console.error("Error deleting client and associated data: ", error);
+            triggerNotification('Erreur de suppression');
+        }
     };
 
     // --- Project Management ---
-    const addProject = (projectData: Omit<Project, 'id'>): Project => {
-        const newProject: Project = { ...projectData, id: generateId() };
-        setAppState(prev => ({ ...prev, projects: [...prev.projects, newProject] }));
-        triggerNotification('Sauvegardé ✓', true);
-        return newProject;
+    const addProject = async (projectData: Omit<Project, 'id'>): Promise<Project> => {
+        if (!currentUser) throw new Error("Not authenticated");
+        try {
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'projects'), projectData);
+            triggerNotification('Sauvegardé ✓', true);
+            return { ...projectData, id: docRef.id };
+        } catch (error) {
+            console.error("Error adding project: ", error);
+            triggerNotification('Erreur de sauvegarde');
+            throw error;
+        }
     };
     
-    const updateProject = (projectId: string, updates: Partial<Project>) => {
-        setAppState(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, ...updates } : p) }));
-        triggerNotification('Sauvegardé ✓', true);
+    const updateProject = async (projectId: string, updates: Partial<Project>) => {
+        if (!currentUser) return;
+        try {
+            await updateDoc(doc(db, 'users', currentUser.uid, 'projects', projectId), updates);
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating project: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
-    const deleteProject = (projectId: string) => {
-        setAppState(prev => ({
-            ...prev,
-            projects: prev.projects.filter(p => p.id !== projectId),
-            tasks: prev.tasks.filter(t => t.projectId !== projectId)
-        }));
-        triggerNotification('Sauvegardé ✓', true);
+    const deleteProject = async (projectId: string) => {
+        if (!currentUser) return;
+        try {
+            const tasksToDelete = appState.tasks.filter(t => t.projectId === projectId);
+            for (const task of tasksToDelete) {
+                await deleteTask(task.id);
+            }
+            await deleteDoc(doc(db, 'users', currentUser.uid, 'projects', projectId));
+            triggerNotification('Projet et tâches associées supprimés ✓', true);
+        } catch (error) {
+            console.error("Error deleting project and associated tasks: ", error);
+            triggerNotification('Erreur de suppression');
+        }
     };
 
-    const updateProjectStatus = (projectId: string, status: ProjectStatus) => {
-      setAppState(prev => ({...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, status } : p) }));
-      triggerNotification('Sauvegardé ✓', true);
+    const updateProjectStatus = async (projectId: string, status: ProjectStatus) => {
+        if (!currentUser) return;
+        try {
+            await updateDoc(doc(db, 'users', currentUser.uid, 'projects', projectId), { status });
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating project status: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
     
     // --- Task Management ---
-    const addTask = (taskData: Omit<Task, 'id'|'completed'>): Task => {
-        const newTask: Task = { ...taskData, id: generateId(), completed: false };
-        setAppState(prev => ({...prev, tasks: [...prev.tasks, newTask].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
-        triggerNotification('Sauvegardé ✓', true);
-        return newTask;
+    const addTask = async (taskData: Omit<Task, 'id'|'completed'>): Promise<Task> => {
+        if (!currentUser) throw new Error("Not authenticated");
+        const newTask = { ...taskData, completed: false };
+        try {
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'tasks'), newTask);
+            triggerNotification('Sauvegardé ✓', true);
+            return { ...newTask, id: docRef.id };
+        } catch (error) {
+            console.error("Error adding task: ", error);
+            triggerNotification('Erreur de sauvegarde');
+            throw error;
+        }
     };
 
-    const updateTask = (taskId: string, updates: Partial<Task>) => {
-        setAppState(prev => ({...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) }));
-        triggerNotification('Sauvegardé ✓', true);
+    const updateTask = async (taskId: string, updates: Partial<Task>) => {
+        if (!currentUser) return;
+        try {
+            await updateDoc(doc(db, 'users', currentUser.uid, 'tasks', taskId), updates);
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating task: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
-    const deleteTask = (taskId: string) => {
-        setAppState(prev => ({...prev, tasks: prev.tasks.filter(t => t.id !== taskId) }));
-        triggerNotification('Sauvegardé ✓', true);
+    const deleteTask = async (taskId: string) => {
+        if (!currentUser) return;
+        try {
+            await deleteDoc(doc(db, 'users', currentUser.uid, 'tasks', taskId));
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error deleting task: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
     // --- Note Management ---
-    const addNote = (noteData: Partial<Omit<Note, 'id'|'createdAt'>>): Note => {
-        const newNote: Note = { 
+    const addNote = async (noteData: Partial<Omit<Note, 'id'|'createdAt'>>): Promise<Note> => {
+        if (!currentUser) throw new Error("Not authenticated");
+        const newNote = {
             content: 'Nouvelle note...', x: 50, y: 50, width: 192, height: 192,
             color: NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
             rotation: Math.random() * 4 - 2, ...noteData,
-            id: generateId(), createdAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
         };
-        setAppState(prev => ({...prev, notes: [...prev.notes, newNote]}));
-        triggerNotification('Sauvegardé ✓', true);
-        return newNote;
+        try {
+            const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'notes'), newNote);
+            triggerNotification('Sauvegardé ✓', true);
+            return { ...newNote, id: docRef.id };
+        } catch (error) {
+            console.error("Error adding note: ", error);
+            triggerNotification('Erreur de sauvegarde');
+            throw error;
+        }
     };
 
-    const updateNote = (noteId: string, updates: Partial<Note>) => {
-        setAppState(prev => ({...prev, notes: prev.notes.map(n => n.id === noteId ? { ...n, ...updates } : n)}));
-        triggerNotification('Sauvegardé ✓', true);
+    const updateNote = async (noteId: string, updates: Partial<Note>) => {
+        if (!currentUser) return;
+        try {
+            await updateDoc(doc(db, 'users', currentUser.uid, 'notes', noteId), updates);
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating note: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
-    const deleteNote = (noteId: string) => {
-        setAppState(prev => ({...prev, notes: prev.notes.filter(n => n.id !== noteId)}));
-        triggerNotification('Sauvegardé ✓', true);
+    const deleteNote = async (noteId: string) => {
+        if (!currentUser) return;
+        try {
+            await deleteDoc(doc(db, 'users', currentUser.uid, 'notes', noteId));
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error deleting note: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
     // --- Note Link Management ---
-    const addNoteLink = (from: string, to: string) => {
-      if (from === to) return;
-      setAppState(prev => {
-          const exists = prev.noteLinks.some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from));
-          if (exists) return prev;
-          const newLink: NoteLink = { id: generateId(), from, to };
-          triggerNotification('Sauvegardé ✓', true);
-          return {...prev, noteLinks: [...prev.noteLinks, newLink]};
-      });
+    const addNoteLink = async (from: string, to: string) => {
+        if (!currentUser || from === to) return;
+        try {
+            await addDoc(collection(db, 'users', currentUser.uid, 'noteLinks'), { from, to });
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error adding note link: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
-    const deleteNoteLink = (linkId: string) => {
-        setAppState(prev => ({...prev, noteLinks: prev.noteLinks.filter(l => l.id !== linkId)}));
-        triggerNotification('Sauvegardé ✓', true);
+    const deleteNoteLink = async (linkId: string) => {
+        if (!currentUser) return;
+        try {
+            await deleteDoc(doc(db, 'users', currentUser.uid, 'noteLinks', linkId));
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error deleting note link: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
     
-    const deleteLinksForNote = (noteId: string) => {
-        setAppState(prev => ({...prev, noteLinks: prev.noteLinks.filter(l => l.from !== noteId && l.to !== noteId)}));
-        triggerNotification('Sauvegardé ✓', true);
+    const deleteLinksForNote = async (noteId: string) => {
+        if (!currentUser) return;
+        try {
+            const linksToDelete = appState.noteLinks.filter(l => l.from === noteId || l.to === noteId);
+            for (const link of linksToDelete) {
+                await deleteNoteLink(link.id);
+            }
+        } catch (error) {
+            console.error("Error deleting links for note: ", error);
+        }
     };
 
     // --- Document Management ---
-    const addDocument = (docData: Omit<DocumentFile, 'id' | 'uploadedAt'>) => {
-        const newDocument: DocumentFile = { ...docData, id: generateId(), uploadedAt: new Date().toISOString() };
-        setAppState(prev => ({...prev, documents: [...prev.documents, newDocument]}));
-        triggerNotification('Sauvegardé ✓', true);
+    const addDocument = async (docData: Omit<DocumentFile, 'id' | 'uploadedAt'>) => {
+        if (!currentUser) return;
+        const newDocument = { ...docData, uploadedAt: new Date().toISOString() };
+        try {
+            await addDoc(collection(db, 'users', currentUser.uid, 'documents'), newDocument);
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error adding document: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     }
     
-     const addVideo = (videoData: Omit<DocumentFile, 'id' | 'uploadedAt' | 'type'>) => {
-        const newVideo: DocumentFile = { ...videoData, id: generateId(), uploadedAt: new Date().toISOString(), type: 'video' };
-        setAppState(prev => ({...prev, documents: [...prev.documents, newVideo]}));
-        triggerNotification('Sauvegardé ✓', true);
+     const addVideo = async (videoData: Omit<DocumentFile, 'id' | 'uploadedAt' | 'type'>) => {
+        if (!currentUser) return;
+        const newVideo = { ...videoData, uploadedAt: new Date().toISOString(), type: 'video' };
+        try {
+            await addDoc(collection(db, 'users', currentUser.uid, 'documents'), newVideo);
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error adding video: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     }
 
     // --- Portfolio Management ---
-    const addPortfolioVideo = (videoData: Omit<PortfolioVideo, 'id'|'createdAt'|'isPinned'>): PortfolioVideo => {
-        const newVideo: PortfolioVideo = { ...videoData, id: generateId(), createdAt: new Date().toISOString(), isPinned: false };
-        setAppState(prev => ({...prev, portfolioVideos: [...prev.portfolioVideos, newVideo]}));
-        triggerNotification('Sauvegardé ✓', true);
-        return newVideo;
+    const addPortfolioVideo = async (videoData: Omit<PortfolioVideo, 'id'|'createdAt'|'isPinned'>): Promise<PortfolioVideo> => {
+        if (!currentUser) throw new Error("Not authenticated");
+        const newVideo = { ...videoData, createdAt: new Date().toISOString(), isPinned: false };
+        try {
+            const docRef = await addDoc(collection(db, 'publicPortfolioVideos'), newVideo);
+            triggerNotification('Sauvegardé ✓', true);
+            return { ...newVideo, id: docRef.id };
+        } catch (error) {
+            console.error("Error adding portfolio video: ", error);
+            triggerNotification('Erreur de sauvegarde');
+            throw error;
+        }
     };
 
-    const updatePortfolioVideo = (videoId: string, updates: Partial<PortfolioVideo>) => {
-        setAppState(prev => ({...prev, portfolioVideos: prev.portfolioVideos.map(v => v.id === videoId ? { ...v, ...updates } : v) }));
-        triggerNotification('Sauvegardé ✓', true);
+    const updatePortfolioVideo = async (videoId: string, updates: Partial<PortfolioVideo>) => {
+        if (!currentUser) return;
+        try {
+            await updateDoc(doc(db, 'publicPortfolioVideos', videoId), updates);
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating portfolio video: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
-    const deletePortfolioVideo = (videoId: string) => {
-        setAppState(prev => ({...prev, portfolioVideos: prev.portfolioVideos.filter(v => v.id !== videoId) }));
-        triggerNotification('Sauvegardé ✓', true);
+    const deletePortfolioVideo = async (videoId: string) => {
+        if (!currentUser) return;
+        try {
+            await deleteDoc(doc(db, 'publicPortfolioVideos', videoId));
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error deleting portfolio video: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
-    const setYoutubePlaylistUrl = (url: string) => {
-        setAppState(prev => ({ ...prev, youtubePlaylistUrl: url }));
+    const setYoutubePlaylistUrl = async (url: string) => {
+        if (!currentUser) return;
+        try {
+            const profileDocRef = doc(db, 'publicProfile', 'main');
+            await setDoc(profileDocRef, { youtubePlaylistUrl: url }, { merge: true });
+            triggerNotification('Sauvegardé ✓', true);
+        } catch (error) {
+            console.error("Error updating youtube playlist url: ", error);
+            triggerNotification('Erreur de sauvegarde');
+        }
     };
 
     const syncPlaylist = async () => {
@@ -385,37 +450,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const { videos: fetchedVideos } = response.data;
             
-            setAppState(prev => {
-                const existingVideoUrls = new Set(prev.portfolioVideos.map(v => v.videoUrl));
-                const newVideos: PortfolioVideo[] = [];
+            const existingVideoUrls = new Set(appState.portfolioVideos.map(v => v.videoUrl));
+            const newVideos: Omit<PortfolioVideo, 'id'>[] = [];
 
-                fetchedVideos.forEach((item: any) => {
-                    const videoUrl = `https://www.youtube.com/watch?v=${item.videoId}`;
-                    if (!existingVideoUrls.has(videoUrl)) {
-                        newVideos.push({
-                            id: generateId(),
-                            title: item.title,
-                            description: item.description,
-                            videoUrl: videoUrl,
-                            thumbnailUrl: item.thumbnailUrl,
-                            tags: ['YouTube', 'Synchronisé'],
-                            isPinned: false,
-                            createdAt: item.publishedAt || new Date().toISOString(),
-                        });
-                    }
-                });
-
-                if (newVideos.length === 0) {
-                    triggerNotification('Portfolio déjà à jour.');
-                    return prev;
+            fetchedVideos.forEach((item: any) => {
+                const videoUrl = `https://www.youtube.com/watch?v=${item.videoId}`;
+                if (!existingVideoUrls.has(videoUrl)) {
+                    newVideos.push({
+                        title: item.title,
+                        description: item.description,
+                        videoUrl: videoUrl,
+                        thumbnailUrl: item.thumbnailUrl,
+                        tags: ['YouTube', 'Synchronisé'],
+                        isPinned: false,
+                        createdAt: item.publishedAt || new Date().toISOString(),
+                    });
                 }
-
-                triggerNotification(`${newVideos.length} vidéo(s) ajoutée(s) !`, true);
-                return {
-                    ...prev,
-                    portfolioVideos: [...prev.portfolioVideos, ...newVideos],
-                };
             });
+
+            if (newVideos.length === 0) {
+                triggerNotification('Portfolio déjà à jour.');
+                return;
+            }
+
+            for (const video of newVideos) {
+                await addDoc(collection(db, 'publicPortfolioVideos'), video);
+            }
+
+            triggerNotification(`${newVideos.length} vidéo(s) ajoutée(s) !`, true);
 
         } catch (error) {
             console.error("Erreur lors de la synchronisation avec le backend:", error);
@@ -450,7 +512,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             stats, getClientById, getProjectsByClientId, 
             addDocument, addVideo, getDocumentsByClientId,
             saveStatus, triggerNotification,
-            undo, redo, canUndo, canRedo
+            undo: () => {}, redo: () => {}, canUndo: false, canRedo: false
         }}>
             {children}
         </AppContext.Provider>

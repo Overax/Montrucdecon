@@ -1,18 +1,42 @@
-import React, { useState } from 'react';
-import { useAppContext } from '../contexts/AppContext';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 import PortfolioVideoCard from './portfolio/PortfolioVideoCard';
 import ViewVideoModal from './portfolio/ViewVideoModal';
 import Avatar from './ui/Avatar';
-import { PortfolioVideo } from '../types';
+import { PortfolioVideo, FreelancerProfile } from '../types';
 
 const PublicPortfolioPage: React.FC = () => {
-    const { profile, portfolioVideos } = useAppContext();
+    const [profile, setProfile] = useState<FreelancerProfile | null>(null);
+    const [portfolioVideos, setPortfolioVideos] = useState<PortfolioVideo[]>([]);
+    const [loading, setLoading] = useState(true);
     const [videoToView, setVideoToView] = useState<PortfolioVideo | null>(null);
+
+    useEffect(() => {
+        const fetchPublicData = async () => {
+            try {
+                const profileDoc = await getDocs(collection(db, 'publicProfile'));
+                if (!profileDoc.empty) {
+                    setProfile(profileDoc.docs[0].data() as FreelancerProfile);
+                }
+
+                const videosSnapshot = await getDocs(collection(db, 'publicPortfolioVideos'));
+                const videos = videosSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as PortfolioVideo[];
+                setPortfolioVideos(videos);
+            } catch (error) {
+                console.error("Error fetching public data: ", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPublicData();
+    }, []);
 
     const pinnedVideos = portfolioVideos.filter(v => v.isPinned);
     const otherVideos = portfolioVideos.filter(v => !v.isPinned);
 
-    if (!profile) {
+    if (loading) {
         return <div className="w-full h-screen flex items-center justify-center">Chargement...</div>;
     }
 
