@@ -4,6 +4,7 @@ dist/
 
 # macOS
 .DS_Store
+.env
 
 # Logs
 logs/
