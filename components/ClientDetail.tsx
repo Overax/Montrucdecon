@@ -5,11 +5,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import { ICONS, PROJECT_STATUS_COLORS } from '../constants';
 import type { Note, Project, Client } from '../types';
-import { GoogleGenAI } from "@google/genai";
 import Avatar from './ui/Avatar';
-
-// Initialize the Gemini AI client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 interface ClientDetailProps {
     clientId: string;
@@ -95,11 +91,20 @@ const GeminiActionPlan: React.FC<{notes: Note[]}> = ({ notes }) => {
         `;
 
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
+            const response = await fetch('/api/gemini-generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ prompt }),
             });
-            setAiResponse(response.text);
+            
+            if (!response.ok) {
+                throw new Error('Failed to generate action plan');
+            }
+            
+            const data = await response.json();
+            setAiResponse(data.text);
         } catch (e) {
             console.error(e);
             setError("Une erreur est survenue lors de l'analyse IA. Veuillez réessayer.");
