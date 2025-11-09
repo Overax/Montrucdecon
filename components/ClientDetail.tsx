@@ -5,11 +5,8 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import { ICONS, PROJECT_STATUS_COLORS } from '../constants';
 import type { Note, Project, Client } from '../types';
-import { GoogleGenAI } from "@google/genai";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import Avatar from './ui/Avatar';
-
-// Initialize the Gemini AI client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 interface ClientDetailProps {
     clientId: string;
@@ -95,11 +92,10 @@ const GeminiActionPlan: React.FC<{notes: Note[]}> = ({ notes }) => {
         `;
 
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
-            setAiResponse(response.text);
+            const functions = getFunctions();
+            const callGemini = httpsCallable< { prompt: string }, { result: { candidates: { content: { parts: { text: string }[] } }[] } } >(functions, 'callGemini');
+            const response = await callGemini({ prompt });
+            setAiResponse(response.data.result.candidates[0].content.parts[0].text);
         } catch (e) {
             console.error(e);
             setError("Une erreur est survenue lors de l'analyse IA. Veuillez réessayer.");
@@ -174,14 +170,10 @@ const GeminiStrategicAnalysis: React.FC<{client: Client, projects: Project[], no
         `;
 
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: prompt,
-                config: {
-                    thinkingConfig: { thinkingBudget: 32768 }
-                }
-            });
-            setAiResponse(response.text);
+            const functions = getFunctions();
+            const callGemini = httpsCallable< { prompt: string }, { result: { candidates: { content: { parts: { text: string }[] } }[] } } >(functions, 'callGemini');
+            const response = await callGemini({ prompt });
+            setAiResponse(response.data.result.candidates[0].content.parts[0].text);
         } catch (e) {
             console.error(e);
             setError("Une erreur est survenue lors de l'analyse stratégique. Veuillez réessayer.");
