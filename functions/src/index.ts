@@ -57,3 +57,52 @@ export const callGemini = functions.https.onCall(async (data, context) => {
     );
   }
 });
+
+const YOUTUBE_API_KEY = functions.config().youtube.key;
+const YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3/playlistItems";
+
+export const syncYouTubePlaylist = functions.https.onCall(async (data, context) => {
+  const { playlistId } = data;
+
+  if (!playlistId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      'The function must be called with one argument "playlistId".'
+    );
+  }
+
+  try {
+    const response = await axios.get(YOUTUBE_API_URL, {
+      params: {
+        part: "snippet",
+        playlistId: playlistId,
+        maxResults: 50, // Limite de l'API, peut être augmenté avec la pagination
+        key: YOUTUBE_API_KEY,
+      },
+    });
+
+    const videos = response.data.items.map((item: any) => ({
+      videoId: item.snippet.resourceId.videoId,
+      title: item.snippet.title,
+      description: item.snippet.description,
+      thumbnailUrl: item.snippet.thumbnails.high.url,
+      publishedAt: item.snippet.publishedAt,
+    }));
+
+    return { videos };
+  } catch (error) {
+    console.error("Error calling YouTube API:", error);
+    if (axios.isAxiosError(error) && error.response) {
+      console.error("YouTube API response error:", error.response.data);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to call YouTube API.",
+        error.response.data
+      );
+    }
+    throw new functions.https.HttpsError(
+      "internal",
+      "An unexpected error occurred while fetching YouTube data."
+    );
+  }
+});

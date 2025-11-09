@@ -42,17 +42,22 @@ La configuration du projet Firebase pour le frontend est stockée dans le fichie
 
 ### Backend (Cloud Functions)
 
-Le backend utilise une clé API pour un service externe (par exemple, Gemini) qui doit être configurée en toute sécurité.
+Le backend utilise des clés API pour des services externes (Google Gemini et YouTube) qui doivent être configurées en toute sécurité.
 
-1.  **Récupérez votre clé API :**
-    Obtenez votre clé API auprès du fournisseur de services que vous souhaitez utiliser.
+1.  **Récupérez vos clés API :**
+    -   Obtenez votre clé API **Google Gemini** depuis le [Google AI Studio](https://aistudio.google.com/app/apikey).
+    -   Obtenez votre clé API **YouTube Data API v3** depuis la [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com).
 
-2.  **Définissez la clé API secrète dans la configuration de Firebase :**
-    Exécutez la commande suivante en remplaçant `<VOTRE_CLE_API_GEMINI>` par votre clé API réelle.
+2.  **Définissez les clés API secrètes dans la configuration de Firebase :**
+    Exécutez les commandes suivantes en remplaçant les placeholders par vos clés API réelles.
     ```bash
+    # Pour l'API Gemini
     firebase functions:config:set gemini.key="<VOTRE_CLE_API_GEMINI>"
+
+    # Pour l'API YouTube
+    firebase functions:config:set youtube.key="<VOTRE_CLE_API_YOUTUBE>"
     ```
-    Cette commande stocke votre clé en toute sécurité dans l'environnement de votre projet Firebase.
+    Ces commandes stockent vos clés en toute sécurité dans l'environnement de votre projet Firebase.
 
 ## Construire le projet
 

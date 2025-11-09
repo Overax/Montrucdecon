@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Client, Project, Task, Note, FreelancerProfile, ProjectStatus, DocumentFile, NoteLink, PortfolioVideo } from '../types';
 import { NOTE_COLORS } from '../constants';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // --- Combined App State ---
 interface AppState {
@@ -377,23 +378,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         const playlistId = match[1];
 
-        // This function now calls a backend API route.
-        // The backend should securely use the YouTube API key and return the video data.
         try {
-            const response = await fetch('/api/sync-youtube', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ playlistId }),
-            });
+            const functions = getFunctions();
+            const syncYouTubePlaylist = httpsCallable< { playlistId: string }, { videos: any[] } >(functions, 'syncYouTubePlaylist');
+            const response = await syncYouTubePlaylist({ playlistId });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Erreur du serveur backend.');
-            }
-
-            const { videos: fetchedVideos } = await response.json();
+            const { videos: fetchedVideos } = response.data;
             
             setAppState(prev => {
                 const existingVideoUrls = new Set(prev.portfolioVideos.map(v => v.videoUrl));
