@@ -1,8 +1,8 @@
 
 export type ProjectStatus = 'À Démarrer' | 'En Cours' | 'En Révision' | 'Terminé';
 export type TaskPriority = 'Basse' | 'Moyenne' | 'Haute';
-export type View = 'dashboard' | 'clients' | 'projects' | 'tasks' | 'calendar' | 'clientDetail' | 'notes' | 'settings';
-export type ModalType = 'hub' | 'newClient' | 'newProject' | 'newTask' | 'newVideo' | 'newEvent' | null;
+export type View = 'dashboard' | 'clients' | 'projects' | 'tasks' | 'calendar' | 'clientDetail' | 'notes' | 'settings' | 'portfolio';
+export type ModalType = 'hub' | 'newClient' | 'newProject' | 'newTask' | 'newVideo' | 'newEvent' | 'newPortfolioVideo' | null;
 
 
 export interface FreelancerProfile {
@@ -73,6 +73,18 @@ export interface DocumentFile {
   uploadedAt: string;
   url?: string;
   thumbnailUrl?: string;
+}
+
+export interface PortfolioVideo {
+  id: string;
+  title: string;
+  description: string;
+  videoUrl: string; // YouTube, Vimeo, etc. embeddable URL
+  thumbnailUrl: string;
+  tags: string[];
+  isPinned: boolean;
+  createdAt: string;
+  projectId?: string; // Optional link to an internal project
 }
 
 export type TemplateTask = {

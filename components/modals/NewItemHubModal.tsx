@@ -6,7 +6,7 @@ import type { ModalType } from '../../types';
 
 interface NewItemHubModalProps {
   onClose: () => void;
-  openModal: (modal: ModalType) => void;
+  openModal: (modal: Exclude<ModalType, 'hub' | null>, payload?: any) => void;
 }
 
 const HubButton: React.FC<{ label: string; icon: React.ReactNode; onClick: () => void; }> = ({ label, icon, onClick }) => (
@@ -22,7 +22,7 @@ const HubButton: React.FC<{ label: string; icon: React.ReactNode; onClick: () =>
 const NewItemHubModal: React.FC<NewItemHubModalProps> = ({ onClose, openModal }) => {
   return (
     <ModalWrapper title="Créer un nouvel élément" onClose={onClose}>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <HubButton 
             label="Client" 
             icon={<ICONS.userAdd className="w-8 h-8"/>} 
@@ -37,6 +37,11 @@ const NewItemHubModal: React.FC<NewItemHubModalProps> = ({ onClose, openModal })
             label="Tâche" 
             icon={<ICONS.checkCircle className="w-8 h-8"/>}
             onClick={() => { onClose(); openModal('newTask'); }}
+        />
+        <HubButton 
+            label="Vidéo Portfolio" 
+            icon={<ICONS.collection className="w-8 h-8"/>}
+            onClick={() => { onClose(); openModal('newPortfolioVideo'); }}
         />
       </div>
     </ModalWrapper>

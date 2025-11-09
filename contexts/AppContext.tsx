@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { Client, Project, Task, Note, FreelancerProfile, ProjectStatus, DocumentFile, NoteLink } from '../types';
+import type { Client, Project, Task, Note, FreelancerProfile, ProjectStatus, DocumentFile, NoteLink, PortfolioVideo } from '../types';
 import { NOTE_COLORS } from '../constants';
 
 // --- Combined App State ---
@@ -11,6 +11,8 @@ interface AppState {
     notes: Note[];
     noteLinks: NoteLink[];
     documents: DocumentFile[];
+    portfolioVideos: PortfolioVideo[];
+    youtubePlaylistUrl: string;
 }
 
 interface AppContextType extends AppState {
@@ -34,6 +36,11 @@ interface AppContextType extends AppState {
     addNoteLink: (from: string, to: string) => void;
     deleteNoteLink: (linkId: string) => void;
     deleteLinksForNote: (noteId: string) => void;
+    addPortfolioVideo: (video: Omit<PortfolioVideo, 'id' | 'createdAt' | 'isPinned'>) => PortfolioVideo;
+    updatePortfolioVideo: (videoId: string, updates: Partial<PortfolioVideo>) => void;
+    deletePortfolioVideo: (videoId: string) => void;
+    setYoutubePlaylistUrl: (url: string) => void;
+    syncPlaylist: () => Promise<void>;
     stats: {
         clientCount: number;
         activeProjects: number;
@@ -47,6 +54,7 @@ interface AppContextType extends AppState {
     getDocumentsByClientId: (id: string) => DocumentFile[];
     getNotesByClientId: (id: string) => Note[];
     saveStatus: string;
+    triggerNotification: (message: string, isSave?: boolean) => void;
     undo: () => void;
     redo: () => void;
     canUndo: boolean;
@@ -90,7 +98,12 @@ const DUMMY_APP_STATE: AppState = {
     ],
     noteLinks: [
       { id: 'link_1', from: 'note_board_1', to: 'note_board_2' },
-    ]
+    ],
+    portfolioVideos: [
+      { id: 'pv_1', title: 'Showreel 2024', description: 'Ma dernière démo de montage et motion design.', videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg', tags: ['Showreel', 'Motion Design'], isPinned: true, createdAt: new Date().toISOString() },
+      { id: 'pv_2', title: 'Pub "CyberGlow"', description: 'Montage dynamique pour une marque de tech.', videoUrl: 'https://www.youtube.com/watch?v=rokGy0huYEA', thumbnailUrl: 'https://i.ytimg.com/vi/rokGy0huYEA/hqdefault.jpg', tags: ['Publicité', 'Tech'], isPinned: false, createdAt: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString(), projectId: 'proj_1' },
+    ],
+    youtubePlaylistUrl: 'https://www.youtube.com/playlist?list=PLy2Fsz7cYaMASj-41JEI1HcABJnaMj9Oh',
 };
 
 const EMPTY_APP_STATE: AppState = {
@@ -101,6 +114,8 @@ const EMPTY_APP_STATE: AppState = {
     notes: [],
     noteLinks: [],
     documents: [],
+    portfolioVideos: [],
+    youtubePlaylistUrl: '',
 }
 // --- END DUMMY DATA ---
 
@@ -110,13 +125,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // --- Undo/Redo State Management ---
     const [history, setHistory] = useState<AppState[]>(() => {
+        const hasOnboarded = window.localStorage.getItem('freelancerOnboarded') === 'true';
+        const defaultState = hasOnboarded ? EMPTY_APP_STATE : DUMMY_APP_STATE;
         try {
             const item = window.localStorage.getItem('appStateHistory');
-            if (item) return JSON.parse(item);
-        } catch (error) { console.error("Error reading history from localStorage", error); }
-
-        const hasOnboarded = window.localStorage.getItem('freelancerOnboarded') === 'true';
-        return [hasOnboarded ? EMPTY_APP_STATE : DUMMY_APP_STATE];
+            if (item) {
+                const parsedHistory = JSON.parse(item) as any[];
+                return parsedHistory.map(state => {
+                    return {
+                        ...EMPTY_APP_STATE,
+                        ...state
+                    };
+                });
+            }
+        } catch (error) { 
+            console.error("Error reading history from localStorage", error); 
+        }
+        return [defaultState];
     });
 
     const [currentIndex, setCurrentIndex] = useState(() => {
@@ -154,14 +179,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const canUndo = currentIndex > 0;
     const canRedo = currentIndex < history.length - 1;
 
-    const triggerSaveNotification = useCallback((message: string = 'Sauvegardé ✓') => {
+    const triggerNotification = useCallback((message: string, isSave: boolean = false) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         
-        let statusMessage = message;
-        if (message === 'Sauvegardé ✓') {
+        if (isSave) {
             setSaveStatus('Sauvegarde...');
         } else {
-            setSaveStatus(message); // For undo/redo immediate feedback
+            setSaveStatus(message);
         }
 
         saveTimeoutRef.current = window.setTimeout(() => {
@@ -173,34 +197,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const undo = useCallback(() => {
         if (canUndo) {
             setCurrentIndex(i => i - 1);
-            triggerSaveNotification('Action annulée');
+            triggerNotification('Action annulée');
         }
-    }, [canUndo, triggerSaveNotification]);
+    }, [canUndo, triggerNotification]);
 
     const redo = useCallback(() => {
         if (canRedo) {
             setCurrentIndex(i => i + 1);
-            triggerSaveNotification('Action rétablie');
+            triggerNotification('Action rétablie');
         }
-    }, [canRedo, triggerSaveNotification]);
+    }, [canRedo, triggerNotification]);
     
     // --- Profile Management ---
     const updateProfile = (updates: Partial<FreelancerProfile>) => {
         setAppState(prev => ({ ...prev, profile: { ...prev.profile, ...updates } }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     // --- Client Management ---
     const addClient = (clientData: Omit<Client, 'id' | 'createdAt'>): Client => {
         const newClient: Client = { ...clientData, id: generateId(), createdAt: new Date().toISOString() };
         setAppState(prev => ({ ...prev, clients: [...prev.clients, newClient] }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
         return newClient;
     };
     
     const updateClient = (clientId: string, updates: Partial<Client>) => {
         setAppState(prev => ({ ...prev, clients: prev.clients.map(c => c.id === clientId ? { ...c, ...updates } : c) }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     const deleteClient = (clientId: string) => {
@@ -215,20 +239,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 clients: prev.clients.filter(c => c.id !== clientId)
             };
         });
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     // --- Project Management ---
     const addProject = (projectData: Omit<Project, 'id'>): Project => {
         const newProject: Project = { ...projectData, id: generateId() };
         setAppState(prev => ({ ...prev, projects: [...prev.projects, newProject] }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
         return newProject;
     };
     
     const updateProject = (projectId: string, updates: Partial<Project>) => {
         setAppState(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, ...updates } : p) }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     const deleteProject = (projectId: string) => {
@@ -237,30 +261,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             projects: prev.projects.filter(p => p.id !== projectId),
             tasks: prev.tasks.filter(t => t.projectId !== projectId)
         }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     const updateProjectStatus = (projectId: string, status: ProjectStatus) => {
       setAppState(prev => ({...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, status } : p) }));
-      triggerSaveNotification();
+      triggerNotification('Sauvegardé ✓', true);
     };
     
     // --- Task Management ---
     const addTask = (taskData: Omit<Task, 'id'|'completed'>): Task => {
         const newTask: Task = { ...taskData, id: generateId(), completed: false };
         setAppState(prev => ({...prev, tasks: [...prev.tasks, newTask].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
         return newTask;
     };
 
     const updateTask = (taskId: string, updates: Partial<Task>) => {
         setAppState(prev => ({...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     const deleteTask = (taskId: string) => {
         setAppState(prev => ({...prev, tasks: prev.tasks.filter(t => t.id !== taskId) }));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     // --- Note Management ---
@@ -272,18 +296,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             id: generateId(), createdAt: new Date().toISOString(),
         };
         setAppState(prev => ({...prev, notes: [...prev.notes, newNote]}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
         return newNote;
     };
 
     const updateNote = (noteId: string, updates: Partial<Note>) => {
         setAppState(prev => ({...prev, notes: prev.notes.map(n => n.id === noteId ? { ...n, ...updates } : n)}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     const deleteNote = (noteId: string) => {
         setAppState(prev => ({...prev, notes: prev.notes.filter(n => n.id !== noteId)}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     // --- Note Link Management ---
@@ -293,33 +317,135 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const exists = prev.noteLinks.some(l => (l.from === from && l.to === to) || (l.from === to && l.to === from));
           if (exists) return prev;
           const newLink: NoteLink = { id: generateId(), from, to };
-          triggerSaveNotification();
+          triggerNotification('Sauvegardé ✓', true);
           return {...prev, noteLinks: [...prev.noteLinks, newLink]};
       });
     };
 
     const deleteNoteLink = (linkId: string) => {
         setAppState(prev => ({...prev, noteLinks: prev.noteLinks.filter(l => l.id !== linkId)}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
     
     const deleteLinksForNote = (noteId: string) => {
         setAppState(prev => ({...prev, noteLinks: prev.noteLinks.filter(l => l.from !== noteId && l.to !== noteId)}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     };
 
     // --- Document Management ---
     const addDocument = (docData: Omit<DocumentFile, 'id' | 'uploadedAt'>) => {
         const newDocument: DocumentFile = { ...docData, id: generateId(), uploadedAt: new Date().toISOString() };
         setAppState(prev => ({...prev, documents: [...prev.documents, newDocument]}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     }
     
      const addVideo = (videoData: Omit<DocumentFile, 'id' | 'uploadedAt' | 'type'>) => {
         const newVideo: DocumentFile = { ...videoData, id: generateId(), uploadedAt: new Date().toISOString(), type: 'video' };
         setAppState(prev => ({...prev, documents: [...prev.documents, newVideo]}));
-        triggerSaveNotification();
+        triggerNotification('Sauvegardé ✓', true);
     }
+
+    // --- Portfolio Management ---
+    const addPortfolioVideo = (videoData: Omit<PortfolioVideo, 'id'|'createdAt'|'isPinned'>): PortfolioVideo => {
+        const newVideo: PortfolioVideo = { ...videoData, id: generateId(), createdAt: new Date().toISOString(), isPinned: false };
+        setAppState(prev => ({...prev, portfolioVideos: [...prev.portfolioVideos, newVideo]}));
+        triggerNotification('Sauvegardé ✓', true);
+        return newVideo;
+    };
+
+    const updatePortfolioVideo = (videoId: string, updates: Partial<PortfolioVideo>) => {
+        setAppState(prev => ({...prev, portfolioVideos: prev.portfolioVideos.map(v => v.id === videoId ? { ...v, ...updates } : v) }));
+        triggerNotification('Sauvegardé ✓', true);
+    };
+
+    const deletePortfolioVideo = (videoId: string) => {
+        setAppState(prev => ({...prev, portfolioVideos: prev.portfolioVideos.filter(v => v.id !== videoId) }));
+        triggerNotification('Sauvegardé ✓', true);
+    };
+
+    const setYoutubePlaylistUrl = (url: string) => {
+        setAppState(prev => ({ ...prev, youtubePlaylistUrl: url }));
+    };
+
+    const syncPlaylist = async () => {
+        const playlistUrl = appState.youtubePlaylistUrl;
+        const playlistIdRegex = /(?:list=)([a-zA-Z0-9_-]+)/;
+        const match = playlistUrl.match(playlistIdRegex);
+
+        if (!match || !match[1]) {
+            throw new Error('INVALID_PLAYLIST_URL');
+        }
+        const playlistId = match[1];
+        
+        const apiKey = 'AIzaSyBavQiFP2bUrxu5BLRH3-VJKay4ujjhIBQ';
+        
+        const API_URL = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${apiKey}`;
+
+        try {
+            const response = await fetch(API_URL);
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("YouTube API Error:", data);
+                if (data.error) {
+                    const reason = data.error.errors?.[0]?.reason;
+                    if (reason === 'badRequest' || reason === 'API_KEY_INVALID' || response.status === 400) {
+                        throw new Error('YOUTUBE_API_KEY_INVALID');
+                    }
+                    if (response.status === 404) {
+                         throw new Error('PLAYLIST_NOT_FOUND');
+                    }
+                }
+                throw new Error('YOUTUBE_API_ERROR');
+            }
+
+            const newVideos: Omit<PortfolioVideo, 'id' | 'createdAt' | 'isPinned'>[] = [];
+            
+            for (const item of data.items) {
+                const videoId = item.snippet?.resourceId?.videoId;
+                if (!videoId) continue;
+                
+                const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+                const alreadyExists = appState.portfolioVideos.some(v => v.videoUrl.includes(videoId));
+                if (alreadyExists) continue;
+
+                const newVideo = {
+                    title: item.snippet.title,
+                    description: item.snippet.description.substring(0, 300),
+                    videoUrl: videoUrl,
+                    thumbnailUrl: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || '',
+                    tags: ['YouTube'],
+                    projectId: undefined
+                };
+                newVideos.push(newVideo);
+            }
+
+            if (newVideos.length > 0) {
+                const videosToAdd: PortfolioVideo[] = newVideos.map(v => ({
+                    ...v,
+                    id: generateId(),
+                    createdAt: new Date().toISOString(),
+                    isPinned: false
+                }));
+                setAppState(prev => ({
+                    ...prev,
+                    portfolioVideos: [...prev.portfolioVideos, ...videosToAdd]
+                }));
+                triggerNotification(`${newVideos.length} nouvelle(s) vidéo(s) ajoutée(s) !`);
+            } else {
+                triggerNotification("Aucune nouvelle vidéo trouvée.");
+            }
+
+        } catch (error) {
+            console.error("syncPlaylist error:", error);
+            if (error instanceof Error && ['INVALID_PLAYLIST_URL', 'YOUTUBE_API_KEY_INVALID', 'PLAYLIST_NOT_FOUND', 'YOUTUBE_API_ERROR'].includes(error.message)) {
+                throw error;
+            }
+            throw new Error('YOUTUBE_API_ERROR');
+        }
+    };
+
 
     // --- Stats & Getters (memoized for performance) ---
     const stats = useMemo(() => ({
@@ -342,9 +468,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             addTask, updateTask, deleteTask,
             addNote, updateNote, deleteNote, getNotesByClientId,
             addNoteLink, deleteNoteLink, deleteLinksForNote,
+            addPortfolioVideo, updatePortfolioVideo, deletePortfolioVideo,
+            setYoutubePlaylistUrl, syncPlaylist,
             stats, getClientById, getProjectsByClientId, 
             addDocument, addVideo, getDocumentsByClientId,
-            saveStatus,
+            saveStatus, triggerNotification,
             undo, redo, canUndo, canRedo
         }}>
             {children}

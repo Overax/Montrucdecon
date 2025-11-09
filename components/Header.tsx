@@ -8,6 +8,7 @@ import { useAppContext } from '../contexts/AppContext';
 interface HeaderProps {
   currentView: View;
   onNewItem: () => void;
+  onMenuClick: () => void;
 }
 
 const viewTitles: { [key in Exclude<View, 'clientDetail'>]: string } & { clientDetail: string } = {
@@ -17,6 +18,7 @@ const viewTitles: { [key in Exclude<View, 'clientDetail'>]: string } & { clientD
   tasks: 'Mes Tâches',
   calendar: 'Calendrier',
   notes: "Mon Carnet d'Idées",
+  portfolio: "Mon Portfolio",
   settings: "Paramètres",
   clientDetail: 'Fiche Client'
 };
@@ -78,12 +80,21 @@ const UndoRedo: React.FC = () => {
 }
 
 
-const Header: React.FC<HeaderProps> = ({ currentView, onNewItem }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, onNewItem, onMenuClick }) => {
   const showNewButton = currentView !== 'settings';
   
   return (
     <header className="flex items-center justify-between h-16 px-6 md:px-8 bg-transparent flex-shrink-0">
-      <h1 className="text-xl font-bold text-neutral-800 dark:text-neutral-100 capitalize">{viewTitles[currentView]}</h1>
+      <div className="flex items-center space-x-2">
+        <button
+          onClick={onMenuClick}
+          className="p-2 -ml-2 rounded-full text-neutral-500 hover:bg-neutral-200/70 dark:hover:bg-neutral-800/60 transition-colors md:hidden"
+          aria-label="Ouvrir le menu"
+        >
+          <ICONS.hamburger className="w-6 h-6" />
+        </button>
+        <h1 className="text-xl font-bold text-neutral-800 dark:text-neutral-100 capitalize">{viewTitles[currentView]}</h1>
+      </div>
       <div className="flex items-center space-x-2 md:space-x-4">
         {showNewButton && (
           <Button 
