@@ -158,6 +158,14 @@ const AuthenticatedApp: React.FC = () => {
       ? 'flex-1 flex flex-col overflow-hidden bg-neutral-100 dark:bg-neutral-900 p-6 md:p-8'
       : 'flex-1 overflow-x-hidden overflow-y-auto bg-neutral-100 dark:bg-neutral-900 p-6 md:p-8';
 
+    if (!profile) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-neutral-100 dark:bg-neutral-900">
+                <p>Chargement du profil...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-800 dark:text-neutral-200 font-sans">
             {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}

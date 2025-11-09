@@ -8,7 +8,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // --- Combined App State ---
 interface AppState {
-    profile: FreelancerProfile;
+    profile: FreelancerProfile | null;
     clients: Client[];
     projects: Project[];
     tasks: Task[];
@@ -68,7 +68,7 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const EMPTY_APP_STATE: AppState = {
-    profile: { name: '', title: '' },
+    profile: null,
     clients: [],
     projects: [],
     tasks: [],
