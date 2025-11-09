@@ -98,9 +98,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const unsubs: (() => void)[] = [];
 
         // Public data
-        unsubs.push(onSnapshot(collection(db, 'publicProfile'), snapshot => {
-            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            setAppState(prev => ({ ...prev, profile: data[0] as FreelancerProfile }));
+        unsubs.push(onSnapshot(doc(db, 'publicProfile', 'main'), doc => {
+            setAppState(prev => ({ ...prev, profile: doc.data() as FreelancerProfile }));
         }));
         unsubs.push(onSnapshot(collection(db, 'publicPortfolioVideos'), snapshot => {
             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
