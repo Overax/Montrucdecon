@@ -44,8 +44,12 @@ const AuthenticatedApp: React.FC = () => {
     const { profile, updateProfile } = useAppContext();
 
     useEffect(() => {
-        if (profile && !profile.onboarded) {
-            setShowOnboarding(true);
+        if (profile) {
+            if (!profile.onboarded) {
+                setShowOnboarding(true);
+            } else {
+                setShowOnboarding(false);
+            }
         }
     }, [profile]);
 
