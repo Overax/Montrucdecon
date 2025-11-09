@@ -3,11 +3,8 @@ import React, { useState } from 'react';
 import ModalWrapper from './ModalWrapper';
 import Button from '../ui/Button';
 import { useAppContext } from '../../contexts/AppContext';
-import { GoogleGenAI } from "@google/genai";
 import { ICONS, PROJECT_TEMPLATES } from '../../constants';
 import type { ProjectTemplate } from '../../types';
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 interface NewProjectModalProps {
   onClose: () => void;
@@ -31,13 +28,24 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ onClose, onProjectCre
     if (!name.trim()) return;
     setIsGeneratingTasks(true);
     setSuggestedTasks('');
-    const prompt = `Pour un projet de montage vidéo intitulé "${name}", suggère une liste de tâches typiques. Réponds avec une simple liste de points, chaque point commençant par un tiret. Ne mets pas de titre ou d'introduction.`;
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
+        const response = await fetch('/api/gemini-suggest-tasks', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                projectName: name
+            }),
         });
-        setSuggestedTasks(response.text);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erreur du serveur backend.');
+        }
+
+        const { text } = await response.json();
+        setSuggestedTasks(text);
     } catch (error) {
         console.error("Error suggesting tasks:", error);
         setSuggestedTasks("Désolé, une erreur est survenue lors de la suggestion.");

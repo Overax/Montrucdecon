@@ -5,11 +5,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import { ICONS, PROJECT_STATUS_COLORS } from '../constants';
 import type { Note, Project, Client } from '../types';
-import { GoogleGenAI } from "@google/genai";
 import Avatar from './ui/Avatar';
-
-// Initialize the Gemini AI client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 interface ClientDetailProps {
     clientId: string;
@@ -84,22 +80,24 @@ const GeminiActionPlan: React.FC<{notes: Note[]}> = ({ notes }) => {
             return;
         }
 
-        const notesContent = notes.map(n => `- ${n.content}`).join('\n');
-        const prompt = `
-            En tant qu'assistant expert pour un monteur vidéo freelance, analyse les notes suivantes concernant un client. 
-            Génère un plan d'action concis et pertinent sous forme de liste à puces. 
-            Les actions doivent être directement exploitables (ex: "Proposer une série de 3 Reels sur le thème X", "Planifier un point sur le projet Y", "Envoyer la facture Z").
-            
-            Notes du client :
-            ${notesContent}
-        `;
-
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
+            const response = await fetch('/api/gemini-action-plan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    notes: notes.map(n => ({ content: n.content }))
+                }),
             });
-            setAiResponse(response.text);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Erreur du serveur backend.');
+            }
+
+            const { text } = await response.json();
+            setAiResponse(text);
         } catch (e) {
             console.error(e);
             setError("Une erreur est survenue lors de l'analyse IA. Veuillez réessayer.");
@@ -141,47 +139,36 @@ const GeminiStrategicAnalysis: React.FC<{client: Client, projects: Project[], no
         setError('');
         setAiResponse('');
 
-        const clientData = `
-            Client: ${client.name} (${client.company})
-            - Email: ${client.email}
-            - Tags: ${client.tags.join(', ')}
-        `;
-        const projectsData = projects.map(p => 
-            `- Projet: "${p.name}", Statut: ${p.status}, Revenu: ${p.estimatedRevenue}€, Échéance: ${new Date(p.deadline).toLocaleDateString()}`
-        ).join('\n');
-        const notesData = notes.map(n => `- ${n.content}`).join('\n');
-
-        const prompt = `
-            En tant que consultant stratégique pour un monteur vidéo freelance, effectue une analyse approfondie et complexe du client suivant.
-            Utilise ta capacité de raisonnement avancée pour identifier des opportunités de croissance, des risques potentiels, et des suggestions pour améliorer la relation et la valeur à long terme.
-
-            Voici les données complètes :
-
-            **Informations sur le client :**
-            ${clientData}
-
-            **Projets avec ce client :**
-            ${projectsData || "Aucun projet pour le moment."}
-
-            **Notes sur ce client :**
-            ${notesData || "Aucunes notes pour le moment."}
-
-            Fournis une analyse stratégique structurée avec les sections suivantes :
-            1.  **Synthèse et Potentiel :** Résume le profil du client et son potentiel de valeur (faible, moyen, élevé).
-            2.  **Opportunités Clés :** Identifie 3 à 5 opportunités concrètes et actionnables pour augmenter les revenus ou la collaboration (ex: proposer des contrats de retainer, étendre les services à d'autres plateformes, etc.).
-            3.  **Risques et Points de Vigilance :** Souligne les risques potentiels (ex: dépendance à un seul type de projet, concurrence, retards de paiement implicites dans les notes).
-            4.  **Plan de Communication :** Suggère des angles et des moments clés pour aborder les opportunités identifiées avec le client.
-        `;
-
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: prompt,
-                config: {
-                    thinkingConfig: { thinkingBudget: 32768 }
-                }
+            const response = await fetch('/api/gemini-strategic-analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    client: {
+                        name: client.name,
+                        company: client.company,
+                        email: client.email,
+                        tags: client.tags
+                    },
+                    projects: projects.map(p => ({
+                        name: p.name,
+                        status: p.status,
+                        estimatedRevenue: p.estimatedRevenue,
+                        deadline: p.deadline
+                    })),
+                    notes: notes.map(n => ({ content: n.content }))
+                }),
             });
-            setAiResponse(response.text);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Erreur du serveur backend.');
+            }
+
+            const { text } = await response.json();
+            setAiResponse(text);
         } catch (e) {
             console.error(e);
             setError("Une erreur est survenue lors de l'analyse stratégique. Veuillez réessayer.");
